@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.0
+# Version 1.0.1
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -62,7 +62,9 @@ class camUniSearch
 			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&st={$st}" : '');
 			
 			# Get the XML
-			if (!$string = file_get_contents ($queryUrl)) {
+			ini_set ('default_socket_timeout', 5);	// 5 second limitation
+			if (!$string = @file_get_contents ($queryUrl)) {
+				#!# Report to admin?
 				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem retrieving the search results - apologies. Please try again later.</p>";
 				echo $html;
 				return;
