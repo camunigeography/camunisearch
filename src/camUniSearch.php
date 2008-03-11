@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.1
+# Version 1.0.2
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -23,6 +23,8 @@ class camUniSearch
 		The Ultraseek customisation guide is at http://www.ultraseek.com/support/docs/UltraseekCustom/wwhelp/wwhimpl/js/html/wwhelp.htm
 		Note that qp cannot be used in XML retrieval
 	*/
+	
+	var $charset = 'UTF-8';		# Encoding used in entity conversions; www.joelonsoftware.com/articles/Unicode.html is worth a read
 	
 	
 	# Wrapper function to process XML search results
@@ -46,7 +48,7 @@ class camUniSearch
 		# Show the form
 		$html  = "\n<div id=\"{$div}\">";
 		$html .= "\n\t" . '<form method="get" action="" name="f">';
-		$html .= "\n\t\t" . '<input name="qt" type="text" value="' . ($qt ? htmlentities ($qt) : 'Search') . "\" size=\"40\"  onfocus=\"if(this.value == 'Search'){this.value = '';}this.className='focused';\" onblur=\"if(this.value == ''){this.value = 'Search';this.className='blurred';}\" />";
+		$html .= "\n\t\t" . '<input name="qt" type="text" value="' . ($qt ? htmlspecialchars ($qt) : 'Search') . "\" size=\"40\"  onfocus=\"if(this.value == 'Search'){this.value = '';}this.className='focused';\" onblur=\"if(this.value == ''){this.value = 'Search';this.className='blurred';}\" />";
 		$html .= "\n\t\t" . '<input type="submit" value="Search" accesskey="s" />';
 		$html .= "\n\t" . '</form>';
 		$html .= "\n" . '</div>';
@@ -54,21 +56,31 @@ class camUniSearch
 		# If a query term has been supplied, also show the results
 		if ($qt) {
 			
-			# Encode the parameters
+			# Decode the parameters
 			$qt = urlencode ($qt);
 			$st = urlencode ($st);
 			
 			# Define the location of the XML query result
-			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&st={$st}" : '');
+			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&amp;st={$st}" : '');
+			
+			/*
+			# Set the stream context
+			$contextOptions = array ('http' => array ('method' => 'GET', 'header' => "Content-Type: text/xml; charset=utf-8\r\n"));
+			$streamContext = stream_context_create ($contextOptions);
+			*/
 			
 			# Get the XML
 			ini_set ('default_socket_timeout', 5);	// 5 second limitation
-			if (!$string = @file_get_contents ($queryUrl)) {
+			if (!$string = @file_get_contents ($queryUrl /*, false, $streamContext */)) {
 				#!# Report to admin?
 				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem retrieving the search results - apologies. Please try again later.</p>";
 				echo $html;
 				return;
 			}
+			
+			//echo mb_detect_encoding ($string);
+			//application::dumpData ($queryUrl, 1);
+			// echo ("<!-- $string -->");
 			
 			# Remove search highlighting (this avoids having data-centric documents)
 			$string = str_replace (array ('<highlight>', '</highlight>'), '', $string);
@@ -77,8 +89,7 @@ class camUniSearch
 			$xmlobject = simplexml_load_string ($string, NULL, LIBXML_NOENT);
 			
 			# Convert to an array
-			$results = xml::simplexml2array ($xmlobject, $getAttributes = true, false, false);
-			//application::dumpData ($results);
+			$results = xml::simplexml2array ($xmlobject, $getAttributes = true, false);
 			
 			# Deal with pagination
 			$first = $results['results']['@']['first'];
@@ -109,11 +120,11 @@ class camUniSearch
 			
 			# Show the starting description and pagination
 			$searchWords = explode ('+', $qt);
-			$html .= "\n\n<p>You searched for: <em>" . htmlentities (urldecode (implode (' ', $searchWords))) . '</em>.</p>';
+			$html .= "\n\n<p>You searched for: <em>" . htmlspecialchars (urldecode (implode (' ', $searchWords))) . '</em>.</p>';
 			
 			# If there are no results (generally this happens at the high end, hence the 'about' added to the text above for total results, end here
 			if (!isSet ($results['results']['result'])) {
-				$html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?qt={$qt}\">" . htmlentities ($qt) . "</a>.</p>";
+				$html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?qt={$qt}\">" . htmlspecialchars ($qt) . "</a>.</p>";
 				echo $html;
 				return;
 			}
@@ -136,8 +147,8 @@ class camUniSearch
 				
 				# Deal with character encoding
 				#!# Ideally this should be in simplexml2array but that seems not to work
-				$result['title'] = htmlentities ($result['title'], ENT_COMPAT, 'UTF-8');
-				$result['summary'] = htmlentities ($result['summary'], ENT_COMPAT, 'UTF-8');
+				$result['title'] = htmlspecialchars ($result['title']);
+				$result['summary'] = htmlspecialchars ($result['summary']);
 				
 				# Highlight search terms
 				$result['title'] = highlightSearchTerms::replaceHtml ($result['title'], $searchWords, 'referer', $sourceAsTextOnly = true, $showIndication = false);
