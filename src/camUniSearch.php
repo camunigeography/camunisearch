@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.2
+# Version 1.0.3
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -36,7 +36,7 @@ class camUniSearch
 		require_once ('xml.php');
 		
 		# Define the base URL of this application
-		$this->baseUrl = ereg_replace ('/index.html$', '/', $_SERVER['SCRIPT_NAME']);
+		$this->baseUrl = $_SERVER['SCRIPT_NAME'];
 		
 		# Default to the present site if none supplied
 		if (!$site) {$site = $_SERVER['SERVER_NAME'];}
