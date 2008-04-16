@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.3
+# Version 1.0.4
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -25,10 +25,12 @@ class camUniSearch
 	*/
 	
 	var $charset = 'UTF-8';		# Encoding used in entity conversions; www.joelonsoftware.com/articles/Unicode.html is worth a read
+	var $internalServer = 'int.web-search.cam.ac.uk';
+	var $externalServer = 'ext.web-search.cam.ac.uk';
 	
 	
 	# Wrapper function to process XML search results
-	function __construct ($searchServer = 'ext.web-search.cam.ac.uk', $site = false, $div = 'searchform')
+	function __construct ($searchServer = 'auto', $site = false, $div = 'searchform')
 	{
 		# Load required libraries
 		require_once ('application.php');
@@ -59,6 +61,13 @@ class camUniSearch
 			# Decode the parameters
 			$qt = urlencode ($qt);
 			$st = urlencode ($st);
+			
+			# If set to auto, determine which search server to use, based on the user's DNS location
+			if ($searchServer == 'auto') {
+				$dns = gethostbyaddr ($_SERVER['REMOTE_ADDR']);
+				$userIsInCam = (ereg ('\.cam\.ac\.uk$', $dns));
+				$searchServer = ($userIsInCam ? $this->internalServer : $this->externalServer);
+			}
 			
 			# Define the location of the XML query result
 			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&amp;st={$st}" : '');
@@ -102,10 +111,11 @@ class camUniSearch
 				# See if a suggestion was made
 				$suggestion = false;
 				if (isSet ($results['results']['spell']) && isSet ($results['results']['spell']['suggestion'])) {
-					$suggestion = trim (str_replace ("+site:{$site}", '', $results['results']['spell']['suggestion']));
+					$suggestion = trim (str_replace ("site:{$site}", '', $results['results']['spell']['suggestion']));
 				}
 				
 				# Tell the user
+				
 				$html .= "\n<p>No items were found." . ($suggestion ? " Did you perhaps mean <em><a href=\"{$this->baseUrl}?qt={$suggestion}\">{$suggestion}</a></em>?" : '') . '</p>';
 				echo $html;
 				return;
