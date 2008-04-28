@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.4
+# Version 1.0.5
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -70,7 +70,7 @@ class camUniSearch
 			}
 			
 			# Define the location of the XML query result
-			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&amp;st={$st}" : '');
+			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&st={$st}" : '');
 			
 			/*
 			# Set the stream context
@@ -161,7 +161,7 @@ class camUniSearch
 				$result['summary'] = htmlspecialchars ($result['summary']);
 				
 				# Highlight search terms
-				$result['title'] = highlightSearchTerms::replaceHtml ($result['title'], $searchWords, 'referer', $sourceAsTextOnly = true, $showIndication = false);
+				$result['title'] = highlightSearchTerms::replaceHtml ($result['title'], $searchWords, 'referer', $sourceAsTextOnly = false, $showIndication = false);
 				$result['summary'] = highlightSearchTerms::replaceHtml ($result['summary'], $searchWords, 'referer', $sourceAsTextOnly = true, $showIndication = false);
 				
 				# Show the results
