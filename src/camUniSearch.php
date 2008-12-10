@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.5
+# Version 1.0.6
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -95,10 +95,20 @@ class camUniSearch
 			$string = str_replace (array ('<highlight>', '</highlight>'), '', $string);
 			
 			# Get the results and convert to an array
-			$xmlobject = simplexml_load_string ($string, NULL, LIBXML_NOENT);
+			if (!$xmlobject = simplexml_load_string ($string, NULL, LIBXML_NOENT)) {
+				#!# Report to admin?
+				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
+				echo $html;
+				return;
+			}
 			
 			# Convert to an array
-			$results = xml::simplexml2array ($xmlobject, $getAttributes = true, false);
+			if (!$results = xml::simplexml2array ($xmlobject, $getAttributes = true, false)) {
+				#!# Report to admin?
+				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
+				echo $html;
+				return;
+			}
 			
 			# Deal with pagination
 			$first = $results['results']['@']['first'];
