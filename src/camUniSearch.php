@@ -1,7 +1,7 @@
 <?php
 
 # PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.6
+# Version 1.0.7
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -24,13 +24,16 @@ class camUniSearch
 		Note that qp cannot be used in XML retrieval
 	*/
 	
-	var $charset = 'UTF-8';		# Encoding used in entity conversions; www.joelonsoftware.com/articles/Unicode.html is worth a read
-	var $internalServer = 'int.web-search.cam.ac.uk';
-	var $externalServer = 'ext.web-search.cam.ac.uk';
+	private $charset = 'UTF-8';		# Encoding used in entity conversions; www.joelonsoftware.com/articles/Unicode.html is worth a read
+	private $internalServer = 'int.web-search.cam.ac.uk';
+	private $externalServer = 'ext.web-search.cam.ac.uk';
+	
+	# Class properties
+	private $html = '';
 	
 	
 	# Wrapper function to process XML search results
-	function __construct ($searchServer = 'auto', $site = false, $div = 'searchform')
+	function __construct ($searchServer = 'auto', $site = false, $div = 'searchform', $echoHtml = true, $queryTermField = 'qt')
 	{
 		# Load required libraries
 		require_once ('application.php');
@@ -44,16 +47,16 @@ class camUniSearch
 		if (!$site) {$site = $_SERVER['SERVER_NAME'];}
 		
 		# Allow posted variables
-		$qt = (isSet ($_GET['qt']) ? $_GET['qt'] : '');
+		$qt = (isSet ($_GET[$queryTermField]) ? $_GET[$queryTermField] : '');
 		$st = (isSet ($_GET['st']) ? $_GET['st'] : '');
 		
 		# Show the form
-		$html  = "\n<div id=\"{$div}\">";
-		$html .= "\n\t" . '<form method="get" action="" name="f">';
-		$html .= "\n\t\t" . '<input name="qt" type="text" value="' . ($qt ? htmlspecialchars ($qt) : 'Search') . "\" size=\"40\"  onfocus=\"if(this.value == 'Search'){this.value = '';}this.className='focused';\" onblur=\"if(this.value == ''){this.value = 'Search';this.className='blurred';}\" />";
-		$html .= "\n\t\t" . '<input type="submit" value="Search" accesskey="s" />';
-		$html .= "\n\t" . '</form>';
-		$html .= "\n" . '</div>';
+		$this->html .= "\n<div id=\"{$div}\">";
+		$this->html .= "\n\t" . '<form method="get" action="" name="f">';
+		$this->html .= "\n\t\t" . '<input name="' . $queryTermField . '" type="text" value="' . ($qt ? htmlspecialchars ($qt) : 'Search') . "\" size=\"40\"  onfocus=\"if(this.value == 'Search'){this.value = '';}this.className='focused';\" onblur=\"if(this.value == ''){this.value = 'Search';this.className='blurred';}\" />";
+		$this->html .= "\n\t\t" . '<input type="submit" value="Search" accesskey="s" />';
+		$this->html .= "\n\t" . '</form>';
+		$this->html .= "\n" . '</div>';
 		
 		# If a query term has been supplied, also show the results
 		if ($qt) {
@@ -82,8 +85,8 @@ class camUniSearch
 			ini_set ('default_socket_timeout', 5);	// 5 second limitation
 			if (!$string = @file_get_contents ($queryUrl /*, false, $streamContext */)) {
 				#!# Report to admin?
-				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem retrieving the search results - apologies. Please try again later.</p>";
-				echo $html;
+				$this->html .= "\n<p class=\"warning\">Unfortunately, there was a problem retrieving the search results - apologies. Please try again later.</p>";
+				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
@@ -97,16 +100,16 @@ class camUniSearch
 			# Get the results and convert to an array
 			if (!$xmlobject = simplexml_load_string ($string, NULL, LIBXML_NOENT)) {
 				#!# Report to admin?
-				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
-				echo $html;
+				$this->html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
+				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
 			# Convert to an array
 			if (!$results = xml::simplexml2array ($xmlobject, $getAttributes = true, false)) {
 				#!# Report to admin?
-				$html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
-				echo $html;
+				$this->html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
+				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
@@ -126,32 +129,32 @@ class camUniSearch
 				
 				# Tell the user
 				
-				$html .= "\n<p>No items were found." . ($suggestion ? " Did you perhaps mean <em><a href=\"{$this->baseUrl}?qt={$suggestion}\">{$suggestion}</a></em>?" : '') . '</p>';
-				echo $html;
+				$this->html .= "\n<p>No items were found." . ($suggestion ? " Did you perhaps mean <em><a href=\"{$this->baseUrl}?{$queryTermField}={$suggestion}\">{$suggestion}</a></em>?" : '') . '</p>';
+				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
 			# Define the navigation links
 			$previous = $first - 10;
-			$navigation['previous'] = (($previous > 0) ? "<a href=\"{$this->baseUrl}?qt={$qt}&amp;st={$previous}\">" . '<img src="/images/general/previous.gif" alt="Previous" width="14" height="17" /></a>' : '&nbsp;');
+			$navigation['previous'] = (($previous > 0) ? "<a href=\"{$this->baseUrl}?{$queryTermField}={$qt}&amp;st={$previous}\">" . '<img src="/images/general/previous.gif" alt="Previous" width="14" height="17" /></a>' : '&nbsp;');
 			$navigation['current'] = "{$first}-{$last}";
 			$next = $first + 10;
-			$navigation['next'] = (($next <= $total) ? "<a href=\"{$this->baseUrl}?qt={$qt}&amp;st={$next}\">" . '<img src="/images/general/next.gif" alt="Next" width="14" height="17" /></a>' : '&nbsp;');
+			$navigation['next'] = (($next <= $total) ? "<a href=\"{$this->baseUrl}?{$queryTermField}={$qt}&amp;st={$next}\">" . '<img src="/images/general/next.gif" alt="Next" width="14" height="17" /></a>' : '&nbsp;');
 			
 			# Show the starting description and pagination
 			$searchWords = explode ('+', $qt);
-			$html .= "\n\n<p>You searched for: <em>" . htmlspecialchars (urldecode (implode (' ', $searchWords))) . '</em>.</p>';
+			$this->html .= "\n\n<p>You searched for: <em>" . htmlspecialchars (urldecode (implode (' ', $searchWords))) . '</em>.</p>';
 			
 			# If there are no results (generally this happens at the high end, hence the 'about' added to the text above for total results, end here
 			if (!isSet ($results['results']['result'])) {
-				$html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?qt={$qt}\">" . htmlspecialchars ($qt) . "</a>.</p>";
-				echo $html;
+				$this->html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?{$queryTermField}={$qt}\">" . htmlspecialchars ($qt) . "</a>.</p>";
+				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
 			# Show navigation controls
-			$html .= "\n" . application::htmlUl ($navigation, 0, 'navigationmenu', false, false, false, $liClass = true);
-			$html .= "\n<p>" . ($total <= 10 ? ($total == 1 ? 'There is one result' : "There are {$total} results") : "Showing results {$first}-{$last} of about {$total}") . ":</p>";
+			$this->html .= "\n" . application::htmlUl ($navigation, 0, 'navigationmenu', false, false, false, $liClass = true);
+			$this->html .= "\n<p>" . ($total <= 10 ? ($total == 1 ? 'There is one result' : "There are {$total} results") : "Showing results {$first}-{$last} of about {$total}") . ":</p>";
 			
 			# If there is a single result, reorganise the data
 			#!# This is ultimately a problem with simplexml2array but it's acting correctly as it can't otherwise know that a multiple result could be achieved
@@ -162,7 +165,7 @@ class camUniSearch
 			}
 			
 			# Create the list, looping through the results
-			$html .= "\n<dl class=\"searchresults\">";
+			$this->html .= "\n<dl class=\"searchresults\">";
 			foreach ($results['results']['result'] as $key => $result) {
 				
 				# Deal with character encoding
@@ -175,17 +178,24 @@ class camUniSearch
 				$result['summary'] = highlightSearchTerms::replaceHtml ($result['summary'], $searchWords, 'referer', $sourceAsTextOnly = true, $showIndication = false);
 				
 				# Show the results
-				$html .= "
+				$this->html .= "
 				<dt><a href=\"{$result['@']['href']}\">" . $result['title'] . "</a></dt>
 					<dd class=\"description\">" . $result['summary'] . "</dd>
 					<dd class=\"attributes\"><a href=\"{$result['@']['href']}\">{$result['@']['href']}</a> - {$result['size']} <!-- {$result['date']} - Relevance: {$result['score']}--></dd>
 				";
 			}
-			$html .= "\n</dl>";
+			$this->html .= "\n</dl>";
 		}
 		
-		# Show the HTML
-		echo $html;
+		# Show the HTML if required
+		if ($echoHtml) {echo $this->html;}
+	}
+	
+	
+	# Getter for the HTML
+	public function getHtml ()
+	{
+		return $this->html;
 	}
 }
 
