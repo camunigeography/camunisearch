@@ -1,7 +1,7 @@
 <?php
 
-# PHP5 class to deal with interactions with the Cambridge University search engine
-# Version 1.0.7
+# PHP5 class to deal with interactions with the Cambridge University search engine - Ultraseek implementation
+# Version 1.0.8
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -68,7 +68,7 @@ class camUniSearch
 			# If set to auto, determine which search server to use, based on the user's DNS location
 			if ($searchServer == 'auto') {
 				$dns = gethostbyaddr ($_SERVER['REMOTE_ADDR']);
-				$userIsInCam = (ereg ('\.cam\.ac\.uk$', $dns));
+				$userIsInCam = (preg_match ('/\.cam\.ac\.uk$/', $dns));
 				$searchServer = ($userIsInCam ? $this->internalServer : $this->externalServer);
 			}
 			
