@@ -1,39 +1,29 @@
 <?php
 
-# PHP5 class to deal with interactions with the Cambridge University search engine - Ultraseek implementation
-# Version 1.0.8
+# Class to deal with interactions with the Cambridge University search engine
+# Version 1.1.0
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
 {
 	/* NOTES:
 	
-	Note about encoding:
-		This file uses the strategy that everything should be processed as UTF-8 (as that is what Ultraseek gives out)
-		BUT that ONLY at the very final stage, things are converted to HTML entities for display
-		www.phpwact.org/php/i18n/charsets is a good resource covering the issues
-		
 	XML retrieval:
 		SimpleXML has been used rather than the DOM method. However it does not support document-orientated data, so the search highlighting is removed below.
 		If refactoring this code to the DOM method, the following pages may be of particular interest:
-			www.php.net/xml_parse_into_struct
+			http://www.php.net/xml_parse_into_struct
 			http://blog.phpdeveloper.org/?p=16
 		
-	Ultraseek query terms:
-		The Ultraseek customisation guide is at http://www.ultraseek.com/support/docs/UltraseekCustom/wwhelp/wwhimpl/js/html/wwhelp.htm
-		Note that qp cannot be used in XML retrieval
+	Cam Uni documentation:
+		Some documentation is available: at http://www.ucs.cam.ac.uk/web-search/searchforms
 	*/
-	
-	private $charset = 'UTF-8';		# Encoding used in entity conversions; www.joelonsoftware.com/articles/Unicode.html is worth a read
-	private $internalServer = 'int.web-search.cam.ac.uk';
-	private $externalServer = 'ext.web-search.cam.ac.uk';
 	
 	# Class properties
 	private $html = '';
 	
 	
-	# Wrapper function to process XML search results
-	function __construct ($searchServer = 'auto', $site = false, $div = 'searchform', $echoHtml = true, $queryTermField = 'qt')
+	# Wrapper function to process API search results
+	function __construct ($site = false, $div = 'searchform', $echoHtml = true, $queryTermField = 'query')
 	{
 		# Load required libraries
 		require_once ('application.php');
@@ -46,34 +36,37 @@ class camUniSearch
 		# Default to the present site if none supplied
 		if (!$site) {$site = $_SERVER['SERVER_NAME'];}
 		
-		# Allow posted variables
-		$qt = (isSet ($_GET[$queryTermField]) ? $_GET[$queryTermField] : '');
-		$st = (isSet ($_GET['st']) ? $_GET['st'] : '');
+		# Compatibility layer for older query terms
+		#!# Will be removed in a future release shortly
+		if (isSet ($_GET['qt'])) {$_GET['query'] = $_GET['qt'];}
+		
+		# Allow query terms
+		$query = (isSet ($_GET[$queryTermField]) ? $_GET[$queryTermField] : '');
+		$offset = (isSet ($_GET['offset']) ? $_GET['offset'] : '');
 		
 		# Show the form
 		$this->html .= "\n<div id=\"{$div}\">";
 		$this->html .= "\n\t" . '<form method="get" action="" name="f">';
-		$this->html .= "\n\t\t" . '<input name="' . $queryTermField . '" type="text" value="' . ($qt ? htmlspecialchars ($qt) : 'Search') . "\" size=\"40\"  onfocus=\"if(this.value == 'Search'){this.value = '';}this.className='focused';\" onblur=\"if(this.value == ''){this.value = 'Search';this.className='blurred';}\" />";
+		$this->html .= "\n\t\t" . '<input name="' . $queryTermField . '" type="text" value="' . ($query ? htmlspecialchars ($query) : '') . "\" size=\"40\" placeholder=\"Search\" />";
 		$this->html .= "\n\t\t" . '<input type="submit" value="Search" accesskey="s" />';
 		$this->html .= "\n\t" . '</form>';
 		$this->html .= "\n" . '</div>';
 		
 		# If a query term has been supplied, also show the results
-		if ($qt) {
+		if ($query) {
 			
 			# Decode the parameters
-			$qt = urlencode ($qt);
-			$st = urlencode ($st);
+			$query = urlencode ($query);
+			$offset = urlencode ($offset);
 			
-			# If set to auto, determine which search server to use, based on the user's DNS location
-			if ($searchServer == 'auto') {
-				$dns = gethostbyaddr ($_SERVER['REMOTE_ADDR']);
-				$userIsInCam = (preg_match ('/\.cam\.ac\.uk$/', $dns));
-				$searchServer = ($userIsInCam ? $this->internalServer : $this->externalServer);
-			}
+			# Default to the present site if none supplied
+			if (!$site) {$site = $_SERVER['SERVER_NAME'];}
+			
+			# Determine any credential of the requesting user which indicates they are internal, so that internal results can be included
+			$internal = $this->userIsInternal ();
 			
 			# Define the location of the XML query result
-			$queryUrl = "http://{$searchServer}/saquery.xml?qt=+site:{$site}+{$qt}" . ($st ? "&st={$st}" : '');
+			$queryUrl = "http://api.search.cam.ac.uk/" . ($internal ? 'ultraseek-xml-cam-only' : 'ultraseek-xml') . "?query={$query}" . "&include={$site}&filterTitle=Website" . ($internal ? "&endUserCrsid={$internal}" : '') . ($offset ? "&offset={$offset}" : '');
 			
 			/*
 			# Set the stream context
@@ -128,33 +121,32 @@ class camUniSearch
 				}
 				
 				# Tell the user
-				
-				$this->html .= "\n<p>No items were found." . ($suggestion ? " Did you perhaps mean <em><a href=\"{$this->baseUrl}?{$queryTermField}={$suggestion}\">{$suggestion}</a></em>?" : '') . '</p>';
+				$this->html .= "\n<p>No items were found." . ($suggestion ? " Did you perhaps mean <em><a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($suggestion) . "\">" . htmlspecialchars ($suggestion) . "</a></em>?" : '') . '</p>';
 				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
 			# Define the navigation links
-			$previous = $first - 10;
-			$navigation['previous'] = (($previous > 0) ? "<a href=\"{$this->baseUrl}?{$queryTermField}={$qt}&amp;st={$previous}\">" . '<img src="/images/general/previous.gif" alt="Previous" width="14" height="17" /></a>' : '&nbsp;');
+			$offsetPrevious = $first - 1 - 10;
+			$navigation['previous'] = (($offsetPrevious >= 0) ? "<a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . ($offsetPrevious > 1 ? "&amp;offset={$offsetPrevious}" : '') . "\">" . '<img src="/images/general/previous.gif" alt="Previous" width="14" height="17" /></a>' : '&nbsp;');
 			$navigation['current'] = "{$first}-{$last}";
-			$next = $first + 10;
-			$navigation['next'] = (($next <= $total) ? "<a href=\"{$this->baseUrl}?{$queryTermField}={$qt}&amp;st={$next}\">" . '<img src="/images/general/next.gif" alt="Next" width="14" height="17" /></a>' : '&nbsp;');
+			$offsetNext = $last;
+			$navigation['next'] = (($offsetNext < $total) ? "<a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . "&amp;offset={$offsetNext}\">" . '<img src="/images/general/next.gif" alt="Next" width="14" height="17" /></a>' : '&nbsp;');
 			
 			# Show the starting description and pagination
-			$searchWords = explode ('+', $qt);
+			$searchWords = explode ('+', $query);
 			$this->html .= "\n\n<p>You searched for: <em>" . htmlspecialchars (urldecode (implode (' ', $searchWords))) . '</em>.</p>';
 			
 			# If there are no results (generally this happens at the high end, hence the 'about' added to the text above for total results, end here
 			if (!isSet ($results['results']['result'])) {
-				$this->html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?{$queryTermField}={$qt}\">" . htmlspecialchars ($qt) . "</a>.</p>";
+				$this->html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . '">' . htmlspecialchars ($query) . "</a>.</p>";
 				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
 			# Show navigation controls
 			$this->html .= "\n" . application::htmlUl ($navigation, 0, 'navigationmenu', false, false, false, $liClass = true);
-			$this->html .= "\n<p>" . ($total <= 10 ? ($total == 1 ? 'There is one result' : "There are {$total} results") : "Showing results {$first}-{$last} of about {$total}") . ":</p>";
+			$this->html .= "\n<p>" . ($total <= 10 ? ($total == 1 ? 'There is one result' : "There are {$total} results") : "Showing results {$first}-{$last} of " . number_format ($total)) . ":</p>";
 			
 			# If there is a single result, reorganise the data
 			#!# This is ultimately a problem with simplexml2array but it's acting correctly as it can't otherwise know that a multiple result could be achieved
@@ -189,6 +181,27 @@ class camUniSearch
 		
 		# Show the HTML if required
 		if ($echoHtml) {echo $this->html;}
+	}
+	
+	
+	# Function to determine if the user is internal and to return the relevant credential
+	private function userIsInternal ()
+	{
+		# If logged-in with Raven, return their username
+		if (isSet ($_SERVER['AUTH_TYPE']) && ($_SERVER['AUTH_TYPE'] == 'Ucam-WebAuth')) {
+			if (isSet ($_SERVER['REMOTE_USER']) && strlen ($_SERVER['REMOTE_USER'])) {
+				return $_SERVER['REMOTE_USER'];
+			}
+		}
+		
+		# If within the cam domain, return their IP
+		$dns = gethostbyaddr ($_SERVER['REMOTE_ADDR']);
+		if (preg_match ('/\.cam\.ac\.uk$/', $dns)) {
+			return 'ip:' . $_SERVER['REMOTE_ADDR'];
+		}
+		
+		# Not internal
+		return false;
 	}
 	
 	
