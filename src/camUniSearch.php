@@ -1,7 +1,7 @@
 <?php
 
 # Class to deal with interactions with the Cambridge University search engine
-# Version 1.1.1
+# Version 1.2.0
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -23,7 +23,7 @@ class camUniSearch
 	
 	
 	# Wrapper function to process API search results
-	function __construct ($site = false, $div = 'searchform', $echoHtml = true, $queryTermField = 'query')
+	function __construct ($site = false, $div = 'searchform', $echoHtml = true, $queryTermField = 'query', $include = false, $filterTitle = false)
 	{
 		# Load required libraries
 		require_once ('application.php');
@@ -39,10 +39,18 @@ class camUniSearch
 		# Allow query terms
 		$query = (isSet ($_GET[$queryTermField]) ? $_GET[$queryTermField] : '');
 		$offset = (isSet ($_GET['offset']) ? $_GET['offset'] : '');
+		$include = (isSet ($_GET['include']) ? $_GET['include'] : '');
+		$filterTitle = (isSet ($_GET['filterTitle']) ? $_GET['filterTitle'] : '');
 		
 		# Show the form
 		$this->html .= "\n<div id=\"{$div}\">";
 		$this->html .= "\n\t" . '<form method="get" action="" name="f">';
+		if ($include) {
+			$this->html .= "\n\t\t" . '<input type="hidden" name="include" value="' . htmlspecialchars ($include) . '" />';
+		}
+		if ($filterTitle) {
+			$this->html .= "\n\t\t" . '<input type="hidden" name="filterTitle" value="' . htmlspecialchars ($filterTitle) . '" />';
+		}
 		$this->html .= "\n\t\t" . '<input name="' . $queryTermField . '" type="text" value="' . ($query ? htmlspecialchars ($query) : '') . "\" size=\"40\" placeholder=\"Search\" />";
 		$this->html .= "\n\t\t" . '<input type="submit" value="Search" accesskey="s" />';
 		$this->html .= "\n\t" . '</form>';
