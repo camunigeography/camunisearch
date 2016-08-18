@@ -1,7 +1,7 @@
 <?php
 
 # Class to deal with interactions with the Cambridge University search engine
-# Version 1.1.0
+# Version 1.1.1
 # http://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
@@ -35,10 +35,6 @@ class camUniSearch
 		
 		# Default to the present site if none supplied
 		if (!$site) {$site = $_SERVER['SERVER_NAME'];}
-		
-		# Compatibility layer for older query terms
-		#!# Will be removed in a future release shortly
-		if (isSet ($_GET['qt'])) {$_GET['query'] = $_GET['qt'];}
 		
 		# Allow query terms
 		$query = (isSet ($_GET[$queryTermField]) ? $_GET[$queryTermField] : '');
