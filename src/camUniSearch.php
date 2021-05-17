@@ -1,23 +1,11 @@
 <?php
 
 # Class to deal with interactions with the Cambridge University search engine
-# Version 1.2.0
-# http://download.geog.cam.ac.uk/projects/camunisearch/
+# Version 1.3.0
+# https://download.geog.cam.ac.uk/projects/camunisearch/
 # Licence: GPL
 class camUniSearch
 {
-	/* NOTES:
-	
-	XML retrieval:
-		SimpleXML has been used rather than the DOM method. However it does not support document-orientated data, so the search highlighting is removed below.
-		If refactoring this code to the DOM method, the following pages may be of particular interest:
-			http://www.php.net/xml_parse_into_struct
-			http://blog.phpdeveloper.org/?p=16
-		
-	Cam Uni documentation:
-		Some documentation is available: at http://www.ucs.cam.ac.uk/web-search/searchforms
-	*/
-	
 	# Class properties
 	private $html = '';
 	
@@ -28,7 +16,6 @@ class camUniSearch
 		# Load required libraries
 		require_once ('application.php');
 		require_once ('pureContent.php');	// Contains highlightSearchTerms
-		require_once ('xml.php');
 		
 		# Define the base URL of this application
 		$this->baseUrl = $_SERVER['SCRIPT_NAME'];
@@ -39,19 +26,19 @@ class camUniSearch
 		# Allow query terms
 		$query = (isSet ($_GET[$queryTermField]) ? $_GET[$queryTermField] : '');
 		$offset = (isSet ($_GET['offset']) ? $_GET['offset'] : '');
-		$include = (isSet ($_GET['include']) ? $_GET['include'] : '');
-		$filterTitle = (isSet ($_GET['filterTitle']) ? $_GET['filterTitle'] : '');
+		//$include = (isSet ($_GET['include']) ? $_GET['include'] : '');
+		//$filterTitle = (isSet ($_GET['filterTitle']) ? $_GET['filterTitle'] : '');
 		
 		# Show the form
 		$this->html .= "\n<div id=\"{$div}\">";
 		$this->html .= "\n\t" . '<form method="get" action="" name="f">';
-		if ($include) {
-			$this->html .= "\n\t\t" . '<input type="hidden" name="include" value="' . htmlspecialchars ($include) . '" />';
-		}
-		if ($filterTitle) {
-			$this->html .= "\n\t\t" . '<input type="hidden" name="filterTitle" value="' . htmlspecialchars ($filterTitle) . '" />';
-		}
-		$this->html .= "\n\t\t" . '<input name="' . $queryTermField . '" type="text" value="' . ($query ? htmlspecialchars ($query) : '') . "\" size=\"40\" placeholder=\"Search\" />";
+		//if ($include) {
+		//	$this->html .= "\n\t\t" . '<input type="hidden" name="include" value="' . htmlspecialchars ($include) . '" />';
+		//}
+		//if ($filterTitle) {
+		//	$this->html .= "\n\t\t" . '<input type="hidden" name="filterTitle" value="' . htmlspecialchars ($filterTitle) . '" />';
+		//}
+		$this->html .= "\n\t\t" . '<input name="' . $queryTermField . '" type="search" value="' . ($query ? htmlspecialchars ($query) : '') . "\" size=\"40\" placeholder=\"Search\" autofocus=\"autofocus\" />";
 		$this->html .= "\n\t\t" . '<input type="submit" value="Search" accesskey="s" />';
 		$this->html .= "\n\t" . '</form>';
 		$this->html .= "\n" . '</div>';
@@ -69,41 +56,26 @@ class camUniSearch
 			# Determine any credential of the requesting user which indicates they are internal, so that internal results can be included
 			$internal = $this->userIsInternal ();
 			
-			# Define the location of the XML query result
-			$queryUrl = "http://api.search.cam.ac.uk/" . ($internal ? 'ultraseek-xml-cam-only' : 'ultraseek-xml') . "?query={$query}" . "&include={$site}&filterTitle=Website" . ($internal ? "&endUserCrsid={$internal}" : '') . ($offset ? "&offset={$offset}" : '');
+			# Define the location of the query result
+			# See: https://docs.squiz.net/funnelback/archive/develop/programming-options/all-results-endpoint.html
+			$queryUrl  = 'https://search.cam.ac.uk/search.json?';
+			//$queryUrl .= 'collection=' . ($internal ? 'secure-cam-meta' : 'cam-meta');
+			$queryUrl .= 'collection=cam-meta';
+			$queryUrl .= "&query={$query}";
+			$queryUrl .= '%20u:' . $site;
+			$queryUrl .= ($offset ? "&start_rank={$offset}" : '');
 			
-			/*
-			# Set the stream context
-			$contextOptions = array ('http' => array ('method' => 'GET', 'header' => "Content-Type: text/xml; charset=utf-8\r\n"));
-			$streamContext = stream_context_create ($contextOptions);
-			*/
-			
-			# Get the XML
+			# Get the result
 			ini_set ('default_socket_timeout', 5);	// 5 second limitation
-			if (!$string = @file_get_contents ($queryUrl /*, false, $streamContext */)) {
+			if (!$json = @file_get_contents ($queryUrl)) {
 				#!# Report to admin?
 				$this->html .= "\n<p class=\"warning\">Unfortunately, there was a problem retrieving the search results - apologies. Please try again later.</p>";
 				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
-			//echo mb_detect_encoding ($string);
-			//application::dumpData ($queryUrl, 1);
-			// echo ("<!-- $string -->");
-			
-			# Remove search highlighting (this avoids having data-centric documents)
-			$string = str_replace (array ('<highlight>', '</highlight>'), '', $string);
-			
-			# Get the results and convert to an array
-			if (!$xmlobject = simplexml_load_string ($string, NULL, LIBXML_NOENT)) {
-				#!# Report to admin?
-				$this->html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
-				if ($echoHtml) {echo $this->html;}
-				return;
-			}
-			
 			# Convert to an array
-			if (!$results = xml::simplexml2array ($xmlobject, $getAttributes = true, false)) {
+			if (!$results = json_decode ($json, true)) {
 				#!# Report to admin?
 				$this->html .= "\n<p class=\"warning\">Unfortunately, there was a problem processing the search results - apologies. Please try again later.</p>";
 				if ($echoHtml) {echo $this->html;}
@@ -111,38 +83,31 @@ class camUniSearch
 			}
 			
 			# Deal with pagination
-			$first = $results['results']['@']['first'];
-			$last = $results['results']['@']['last'];
-			$total = $results['results']['@']['total'];
+			$first = $results['response']['resultPacket']['resultsSummary']['currStart'];
+			$last = $results['response']['resultPacket']['resultsSummary']['currEnd'];
+			$nextStart = $results['response']['resultPacket']['resultsSummary']['nextStart'];
+			$total = $results['response']['resultPacket']['resultsSummary']['totalMatching'];
 			
-			# Get the number of results, or end if none
+			# End if none
 			if (!$total) {
-				
-				# See if a suggestion was made
-				$suggestion = false;
-				if (isSet ($results['results']['spell']) && isSet ($results['results']['spell']['suggestion'])) {
-					$suggestion = trim (str_replace ("site:{$site}", '', $results['results']['spell']['suggestion']));
-				}
-				
-				# Tell the user
-				$this->html .= "\n<p>No items were found." . ($suggestion ? " Did you perhaps mean <em><a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($suggestion) . "\">" . htmlspecialchars ($suggestion) . "</a></em>?" : '') . '</p>';
+				$this->html .= "\n<p>No items were found.</p>";
 				if ($echoHtml) {echo $this->html;}
 				return;
 			}
 			
 			# Define the navigation links
-			$offsetPrevious = $first - 1 - 10;
+			#!# Refactor so that parameters are consistent and in same order as main search - there is duplicated code here
+			$offsetPrevious = $first - 10;
 			$navigation['previous'] = (($offsetPrevious >= 0) ? "<a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . ($offsetPrevious > 1 ? "&amp;offset={$offsetPrevious}" : '') . "\">" . '<img src="/images/general/previous.gif" alt="Previous" width="14" height="17" /></a>' : '&nbsp;');
 			$navigation['current'] = "{$first}-{$last}";
-			$offsetNext = $last;
-			$navigation['next'] = (($offsetNext < $total) ? "<a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . "&amp;offset={$offsetNext}\">" . '<img src="/images/general/next.gif" alt="Next" width="14" height="17" /></a>' : '&nbsp;');
+			$navigation['next'] = (($nextStart < $total) ? "<a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . "&amp;offset={$nextStart}" . "\">" . '<img src="/images/general/next.gif" alt="Next" width="14" height="17" /></a>' : '&nbsp;');
 			
 			# Show the starting description and pagination
 			$searchWords = explode ('+', $query);
 			$this->html .= "\n\n<p>You searched for: <em>" . htmlspecialchars (urldecode (implode (' ', $searchWords))) . '</em>.</p>';
 			
 			# If there are no results (generally this happens at the high end, hence the 'about' added to the text above for total results, end here
-			if (!isSet ($results['results']['result'])) {
+			if (!$results['response']['resultPacket']['results']) {
 				$this->html .= "\n<p>Sorry, no more results available for <a href=\"{$this->baseUrl}?{$queryTermField}=" . htmlspecialchars ($query) . '">' . htmlspecialchars ($query) . "</a>.</p>";
 				if ($echoHtml) {echo $this->html;}
 				return;
@@ -152,32 +117,22 @@ class camUniSearch
 			$this->html .= "\n" . application::htmlUl ($navigation, 0, 'navigationmenu', false, false, false, $liClass = true);
 			$this->html .= "\n<p>" . ($total <= 10 ? ($total == 1 ? 'There is one result' : "There are {$total} results") : "Showing results {$first}-{$last} of " . number_format ($total)) . ":</p>";
 			
-			# If there is a single result, reorganise the data
-			#!# This is ultimately a problem with simplexml2array but it's acting correctly as it can't otherwise know that a multiple result could be achieved
-			if (isSet ($results['results']['result']['title'])) {
-				$onlyResult = $results['results']['result'];
-				unset ($results['results']['result']);
-				$results['results']['result'][0] = $onlyResult;
-			}
-			
 			# Create the list, looping through the results
 			$this->html .= "\n<dl class=\"searchresults\">";
-			foreach ($results['results']['result'] as $key => $result) {
-				
-				# Deal with character encoding
-				#!# Ideally this should be in simplexml2array but that seems not to work
-				$result['title'] = htmlspecialchars ($result['title']);
-				$result['summary'] = htmlspecialchars ($result['summary']);
+			foreach ($results['response']['resultPacket']['results'] as $result) {
 				
 				# Highlight search terms
 				$result['title'] = highlightSearchTerms::replaceHtml ($result['title'], $searchWords, 'referer', $sourceAsTextOnly = false, $showIndication = false);
 				$result['summary'] = highlightSearchTerms::replaceHtml ($result['summary'], $searchWords, 'referer', $sourceAsTextOnly = true, $showIndication = false);
 				
-				# Show the results
+				# Format the filesize
+				$fileSize = application::formatBytes ($result['fileSize']);
+				
+				# Show the results; HTML entities not required as the JSON already seems to have this encoded
 				$this->html .= "
-				<dt><a href=\"{$result['@']['href']}\">" . $result['title'] . "</a></dt>
+				<dt><a href=\"{$result['liveUrl']}\">" . $result['title'] . "</a></dt>
 					<dd class=\"description\">" . $result['summary'] . "</dd>
-					<dd class=\"attributes\"><a href=\"{$result['@']['href']}\">{$result['@']['href']}</a> - {$result['size']} <!-- {$result['date']} - Relevance: {$result['score']}--></dd>
+					<dd class=\"attributes\"><a href=\"{$result['liveUrl']}\">{$result['liveUrl']}</a> - {$fileSize} <!-- {$result['date']} - Relevance: {$result['score']}--></dd>
 				";
 			}
 			$this->html .= "\n</dl>";
