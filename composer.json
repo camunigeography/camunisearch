@@ -9,7 +9,10 @@
             "name": "mvl22"
         }
     ],
-    "require": {},
+    "require": {
+        "libpurecontent/application": "^1.9",
+        "libpurecontent/purecontent": "^1.13"
+    },
     "autoload": {
         "psr-0": {"camUniSearch": "src/"}
     }

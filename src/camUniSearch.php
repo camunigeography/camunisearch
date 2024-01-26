@@ -1,9 +1,6 @@
 <?php
 
 # Class to deal with interactions with the Cambridge University search engine
-# Version 1.3.0
-# https://download.geog.cam.ac.uk/projects/camunisearch/
-# Licence: GPL
 class camUniSearch
 {
 	# Class properties
@@ -13,10 +10,6 @@ class camUniSearch
 	# Wrapper function to process API search results
 	function __construct ($site = false, $div = 'searchform', $echoHtml = true, $queryTermField = 'query', $include = false, $filterTitle = false)
 	{
-		# Load required libraries
-		require_once ('application.php');
-		require_once ('pureContent.php');	// Contains highlightSearchTerms
-		
 		# Define the base URL of this application
 		$this->baseUrl = $_SERVER['SCRIPT_NAME'];
 		
@@ -121,7 +114,7 @@ class camUniSearch
 			$this->html .= "\n<dl class=\"searchresults\">";
 			foreach ($results['response']['resultPacket']['results'] as $result) {
 				
-				# Highlight search terms
+				# Highlight search terms; this class is in pureContent
 				$result['title'] = highlightSearchTerms::replaceHtml ($result['title'], $searchWords, 'referer', $sourceAsTextOnly = false, $showIndication = false);
 				$result['summary'] = highlightSearchTerms::replaceHtml ($result['summary'], $searchWords, 'referer', $sourceAsTextOnly = true, $showIndication = false);
 				
