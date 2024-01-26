@@ -1,0 +1,16 @@
+{
+    "name": "camunigeography/camunisearch",
+    "description": "PHP library camUniSearch",
+    "type": "library",
+    "license": "GPL-3.0-only",
+    "minimum-stability": "stable",
+    "authors": [
+        {
+            "name": "mvl22"
+        }
+    ],
+    "require": {},
+    "autoload": {
+        "psr-0": {"camUniSearch": "src/"}
+    }
+}
