@@ -53,7 +53,7 @@ class camUniSearch
 			# See: https://docs.squiz.net/funnelback/archive/develop/programming-options/all-results-endpoint.html
 			$queryUrl  = 'https://search.cam.ac.uk/search.json?';
 			//$queryUrl .= 'collection=' . ($internal ? 'secure-cam-meta' : 'cam-meta');
-			$queryUrl .= 'collection=cam-meta';
+			$queryUrl .= 'collection=cambridge~sp-cam-meta';
 			$queryUrl .= "&query={$query}";
 			$queryUrl .= '%20u:' . $site;
 			$queryUrl .= ($offset ? "&start_rank={$offset}" : '');
